@@ -16,6 +16,7 @@
 #include <math.h>
 #include <iostream>
 #include "types.h"
+#include <bitset>
 
 struct hammingR
 {
@@ -34,6 +35,7 @@ inline int match(UINT8*P, UINT8*Q, int codelb) {
 	case 8: // 64 bit
 		return popcntll(((UINT64*)P)[0] ^ ((UINT64*)Q)[0]);
 	case 16: // 128 bit
+        //std::cout<<popcntll(((UINT64*)P)[0] ^ ((UINT64*)Q)[0]) << "  "<< popcntll(((UINT64*)P)[1] ^ ((UINT64*)Q)[1])<<std::endl;
 		return popcntll(((UINT64*)P)[0] ^ ((UINT64*)Q)[0]) \
 				+ popcntll(((UINT64*)P)[1] ^ ((UINT64*)Q)[1]);
 	case 32: // 256 bit
@@ -222,6 +224,17 @@ inline UINT64 reorderbits(UINT64 bitstr1, UINT64 bitstr2, UINT64 chunk,int b)
 	}
 	return bitstr;
 }
+
+inline int weight(UINT8 code){
+    std::bitset<8> x;
+    x = int (code);
+    int wt=0;
+    for (int i=0;i<8;i++){
+        if (x[i]==1)
+            wt+= (i%4)+1;
+    }
+    return wt;
+}
 inline void norm_chunks(UINT8* subnorms,UINT32 depth,UINT8* code,int B_over_8) {
 	int numchunks = pow(2,depth);
 	int Bchunks_over_8 = B_over_8/numchunks;
@@ -229,12 +242,14 @@ inline void norm_chunks(UINT8* subnorms,UINT32 depth,UINT8* code,int B_over_8) {
 	UINT8 temp = 0;
 	//if(depth==1)
 	//	printf("as\n");
-	//printf("here\n");
+	//printf("here\n");   
+    // numchunks=8  B_over_8 = 16 Bchunks_over_8=2
 	if(numchunks<=B_over_8){
 		for(int i =0;i<B_over_8;i++){
 			rem = i%Bchunks_over_8;
 			div = i/Bchunks_over_8;
-			temp += popcnt((UINT32)code[i]);
+            //std::cout<<weight((UINT32)code[i]) << " | "<<(UINT32)code[i]<<std::endl;
+			temp += weight((UINT32)code[i]);
 			if(rem == (Bchunks_over_8-1)){
 				subnorms[div]=temp;
 				temp=0;
@@ -268,7 +283,7 @@ inline void norm_chunks(UINT8* subnorms,UINT32 depth,UINT8* code,int B_over_8) {
 			for(UINT32 j=0;j<chunks_per_byte;j++)
 			{
 				masked = smask & code[i];
-				subnorms[index] = popcnt((UINT32) masked);
+				subnorms[index] = weight((UINT32) masked);
 				smask = smask >> bits_per_chunk;
 				index++;
 			}
@@ -288,6 +303,8 @@ inline int l1norm(UINT8* P,int codelb) {
 	case 8: // 64 bit
 		return popcntll(((UINT64*)P)[0]);
 	case 16: // 128 bit
+        std::cout<<popcntll(((UINT64*)P)[0]) \
+				+ popcntll(((UINT64*)P)[1]) <<std::endl;
 		return popcntll(((UINT64*)P)[0]) \
 				+ popcntll(((UINT64*)P)[1]) ;
 	case 32: // 256 bit

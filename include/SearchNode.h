@@ -1,11 +1,20 @@
 #include "types.h"
+#include "node.h"
+#include "root_node.h"
+#include "nodeops.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#define popcnt __builtin_popcount
+#include <cmath>
 #include <utility>
 #include <stack.h>
 
 #define nullptr 0
+static bool abs_compare(int a, int b)
+{
+    return (std::abs(a) < std::abs(b));
+}
 
 UINT64 child_index(UINT8* subnorms, UINT8* child_pattern, int depth) {
 	UINT64 p2d = pow2(depth);
@@ -38,10 +47,12 @@ private:
 	UINT8* query;
 	UINT8* code;
 	int B;
+
 	int hamm_radius;
 	UINT8* query_normchunks;
 	UINT32* num_res;
 	int max_lvl;
+    int R;
 	UINT32 K;
 	Node* root;
 	int NQ;
@@ -57,8 +68,8 @@ private:
 	int num_pairs[100][100];
 
 public:
-	void HNN_search();
-	SearchNode(UINT8*,UINT32, int, int, Node*,int);
+	tuple<int,int> HNN_search();
+	SearchNode(UINT8*,UINT32, int,int, int, Node*,int);
 	~SearchNode();
 	void setQuery(UINT8* query);
 	void all_children(Node*);
@@ -82,13 +93,14 @@ public:
 
 };
 
-SearchNode::SearchNode(UINT8* _code,UINT32 _B_over_8, int _max_lvl, int _K, Node* _root, int _NQ) {
+SearchNode::SearchNode(UINT8* _code,UINT32 _B_over_8, int _max_lvl ,int _R, int _K, Node* _root, int _NQ) {
 
 	root = _root;
 	max_lvl = _max_lvl;
 	B_over_8 = _B_over_8;
 	code = _code;
 	K = _K;	
+    R = _R;
 	B = B_over_8 * 8;
 	NQ = _NQ;
 	main_stack = new stack();
@@ -109,7 +121,6 @@ SearchNode::SearchNode(UINT8* _code,UINT32 _B_over_8, int _max_lvl, int _K, Node
 	int num_chunks = pow2(max_lvl+1)-1;
 	
 	query_normchunks = (UINT8*) malloc(num_chunks * sizeof(UINT8));
-
 
 	num_res = (UINT32*) malloc((B+1) * sizeof(UINT32));
 	par_solutions();
@@ -142,6 +153,7 @@ void SearchNode::setQuery(UINT8* _query) {
 
 
 	memset(num_res, 0, (B+1)*sizeof(*num_res));
+    
 
 	UINT8* c_query_normchunks = query_normchunks;	 
 	for(int i=0;i<max_lvl;i++) {
@@ -150,29 +162,38 @@ void SearchNode::setQuery(UINT8* _query) {
 	}
 }
 
-void SearchNode::HNN_search() {
+tuple<int,int> SearchNode::HNN_search() {
 	num_found = 0;
 	hamm_radius = 0;
 	entry* cur = nullptr;
 	UINT32 total_offset;
-
+    int nodevisit =0;
 	entry* current_entry;
-	sparse_hash_map<UINT64,Node*>::const_iterator got;
-
+    std::unordered_map<UINT64,Node*>::iterator got;
+	//sparse_hash_map<UINT64,Node*>::const_iterator got;
+    /*int qsize =  sizeof(query_normchunks)/sizeof(query_normchunks[0]);
+    for (int h=0;h < qsize;h++){
+        cout<<(int)query_normchunks[h]<< " ";
+    }
+    cout<< " " <<endl;*/
+    //cout<<  query_normchunks[0]-0 <<" herrrrre"<< endl;
 	bool all_chilld = true;
 	for(int i=0;i<=B;i++) {
 		if(query_normchunks[0]+i <= B) {
 			total_offset = query_normchunks[0]+i;
+            
 			got = root->children.find(total_offset);
 			if(got != root->children.end()) {
 				Node* h = got->second;
-				stacks_hammd[i]->push(h);
+                stacks_hammd[i]->push(h);
 				if(lower_bound_distance(h) != i)
 					printf("error");
+                
 			}
 			if(i==0)
 				continue;
 		}
+        //cout<< "here45" <<endl;
 		if(query_normchunks[0]-i>=0) {
 			total_offset = query_normchunks[0]-i;
 			got = root->children.find(total_offset);
@@ -186,22 +207,31 @@ void SearchNode::HNN_search() {
 
 		}
 	}
-	while (true) {
+    //       true  hamm_radius<max_lvl hamm_radius < 10
+    //       search for new nodes untill detemined R- hamming weight
+	while (hamm_radius < R) {
 		//printf("Hamming radius = %d\n",hamm_radius);
 		
 
 		for(int stack_iter = hamm_radius%2 ;stack_iter <=hamm_radius;stack_iter = stack_iter + 2) {
 			cur = stacks_hammd[stack_iter]->head;
-			
+			nodevisit++;
 			while(cur!=nullptr) {
 				if(false)
 					all_chilld =true;
 				else
 					all_chilld = false;
+                /*printf("Hamming radius = %d  %ld %d\n",hamm_radius, sizeof(stacks_hammd)/sizeof(stacks_hammd[0]), stack_iter);*/
+                //int subsize = sizeof(cur->current->subnorms)/sizeof(cur->current->subnorms[0]);
+                /*for (int j=0;j< subsize;j++)
+                    cout<< (int)cur->current->subnorms[j]<< " " ;
+                cout <<cur->current->isleaf <<" "<< subsize<<endl;
+                cout<< "here"<<endl;*/
 				node_search(cur,all_chilld,stack_iter);
 				if(all_chilld) { //  The node is no longer needed in the linked list since we have checked all of its children
 					entry* ent = cur;
 					cur = cur->next;
+                    nodevisit++;
 					stacks_hammd[stack_iter]->size--;
 					if(ent->next==nullptr && ent->prev==nullptr)
 					{
@@ -230,34 +260,44 @@ void SearchNode::HNN_search() {
 				}
 
 				else {
+                    
 					if(cur->current->isleaf) { // for the first elements of stacks that are leaf (only these can be leaf)
 						stacks_hammd[stack_iter]->size--;
 						entry* ent = cur;
+                        //cout<< "here24"<<endl;
 						if(ent->next==nullptr && ent->prev==nullptr)
 						{
 							stacks_hammd[stack_iter]->head = nullptr;
 							stacks_hammd[stack_iter]->tail = nullptr;
 							delete ent;
+                            break;
 
 						}
 						else if(ent->next==nullptr) {//last element of linked list
 							stacks_hammd[stack_iter]->tail = ent->prev;
 							ent->prev->next = nullptr;
 							delete ent;
+                            //cout<< "here240"<<endl;
+                            break;
 
 						}
 						else if(ent->prev == nullptr) {//head element of linked list
 							stacks_hammd[stack_iter]->head = ent->next;
 							ent->next->prev = nullptr;
 							delete ent;
+                            //cout<< "here241"<<endl;
+                            break;
 
 						}
 						else {
 							ent->next->prev = ent->prev;
 							ent->prev->next = ent->next;
 							delete ent;
+                            break;
+                            
 						}
 					}
+                    //cout<< "here242"<<endl;
 					cur = cur->next;
 				}
 
@@ -266,49 +306,59 @@ void SearchNode::HNN_search() {
 			}
 		}
 		//break;
-		num_found += num_res[hamm_radius];
-		//printf("num_found = %d\n",num_found);
-
-		if(num_found + num_res[hamm_radius+1] >= K )
-		{
-			//printf("Broke at %d\n",hamm_radius);
-			//printf("num_found %d\n",num_found);
-			break;
-		}
+        //cout<<"here22"<<endl;
+		//num_found += num_res[hamm_radius];
+		//printf("num_found = %d in radius%d and %dK %d max_lvl\n",num_found, hamm_radius, K, max_lvl);
+		//if(num_found + num_res[hamm_radius+1] >= K )
+		//{
+        //    cout<< num_found + num_res[hamm_radius+1] <<" " << K << endl;
+		//	printf("Broke at %d\n",hamm_radius);
+		//	printf("num_found %d\n",num_found);
+		//	break;
+		//}
+        //break;
 		hamm_radius++;
 		
-		if(hamm_radius>B/2)
-		{	//printf("found so-far: %d\n",num_found + num_res[hamm_radius+1]);
-			break;
-		}
+		//if(hamm_radius>B/2)
+		//{	//printf("found so-far: %d\n",num_found + num_res[hamm_radius+1]);
+		//	break;
+		//}
 
 
 	}
-	int n=0;
-	for(int s=0; s<=B/2 && n < K; s++)
-		for(int c = 0; c < num_res[s] &&  n < K; c++) {
-			//printf("Nearest neighbor: %d\n",res[s*K+c]);
-			//results[n++] = res[s*K+c];
+	//int n=0;
+	//for(int s=0; s<=B/2 && n < K; s++)
+		//for(int c = 0; c < num_res[s] &&  n < K; c++) {
+            //n=+1;
+			//printf("Nearest neighbor: %d %d\n",res[s*K+c] , s*K+c );
+            //cout << (UINT64) results[n] << endl;
+			//results[n] =  (UINT64) res[s*K+c];
 
-		}
+		//}
 	
 	//r += K;
 
-
+    return {num_found,nodevisit};
 
 }
 
 void SearchNode::node_search(entry* ent, bool all_child,int stack_index) {
 	if(ent->current->isleaf) {
+        
 		linear_scan_node(ent->current);
+        //cout<<"here2"<<endl;
 		return;
 	}
+    //cout<<"here10"<<endl;
 	if(all_child) {
+        //cout<<"here11"<<endl;
 		all_children(ent->current);
+        
 	}
-	else
+	else{
+        //cout<<"here12"<<endl;
 		check_r_solution(ent->current);
-
+    }
 }
 
 int SearchNode::lower_bound_distance(Node* node) {
@@ -317,36 +367,95 @@ int SearchNode::lower_bound_distance(Node* node) {
 	UINT8* c_norm_chunk = query_normchunks + s_index;
 	int range = e_index - s_index;
 	int sum_diff = 0;
-	for(int i=0;i<range;i++)
+	for(int i=0;i<range;i++){
+        //cout<< (int)node->subnorms[i] << "  "<< (int)c_norm_chunk[i]<<endl;
+
 		sum_diff += abs(node->subnorms[i] - c_norm_chunk[i]);
+    }
+    //cout<< "sumDiff is "<< sum_diff<<endl;
 	return sum_diff;
+}
+#define MOST_LEFT_BIT_UINT8 (UINT8_MAX / 2 + 1)
+std::string get_bit (uint8_t *byte)
+{
+    int B_over_8 = 128/8;
+    string result = "";
+    for(size_t i=0;i<B_over_8;i++)
+        for (size_t j = 0; j < 8; j++) {
+          if (byte[i] & (MOST_LEFT_BIT_UINT8 >> j))
+            result+="1";
+          else
+            result+="0";
+        }
+	return result;
+}
+
+std::vector<std::vector<int> > transpose( const std::vector<string > &b)
+{
+    if (b.size() == 0)
+        //return ;
+        cerr << "Error reaching to db." << endl;
+
+    std::vector<std::vector<int>> trans_vec(b[1].size(), std::vector<int>());
+
+    for (size_t i = 0; i < b.size(); i++)
+    {
+        for (size_t j = 0; j < b[i].size(); j++)
+        {
+            trans_vec[j].push_back(b[i][j] -  '0');
+        }
+    }
+
+    return trans_vec;
 }
 
 void SearchNode::linear_scan_node(Node* node) {
 	int hammd;
-
+    uint8_t* byte_value;
+    std::vector<string> bitString= {""};
+    std::vector<int> keys;
 	if(lower_bound_distance(node) == hamm_radius) {
-		
 		LL_node* curr= node->head_list_codes;
-		
 		while(curr != nullptr) {
 
-			
-
-			hammd = match(query,code + (UINT64)curr->index*(B_over_8), B_over_8);
-
+            byte_value = code + (UINT64)curr->index*(B_over_8);
+            bitString.push_back(get_bit(byte_value));
 			num_compare++;
-			if(hammd<B/2 && num_res[hammd] < K) {
-				res[hammd * K + num_res[hammd]] = curr->index + 1;
-			}
-			num_res[hammd]++;
-			if(hammd == hamm_radius) {
-				num_found++;
-				if(num_found == K)
-					break;
-			}
+
+			//num_res[hammd]++;
 			curr = curr->next;
 		}
+        string query_bit_string = get_bit(query);
+        int distance;
+        std::vector< std::vector<int>> bitvalue_t = transpose(bitString);
+        std::vector<int>  sumvec(bitvalue_t[0].size());
+
+        std::vector<int> keys;
+
+        for (int i = 0; i < query_bit_string.size(); i++){
+            if (query_bit_string[i] == '1')
+                keys.push_back(i);
+        }
+        int c=0;
+        //cout << keys.size()<<endl;
+        for (auto k:keys){
+            //std::vector<int>  sumvec(bitvalue_t[1].size());
+
+            std::vector<int> dbCol = bitvalue_t[k];
+            
+            for (c = 0; c < dbCol.size(); c++) {
+                
+                sumvec[c] += dbCol[c];
+
+            }
+        }
+        distance = 32 - std::max_element(sumvec.begin(), sumvec.end())[0];
+
+        keys.clear();
+        sumvec.clear();
+        if (distance <= hamm_radius){
+            num_found++;
+        }
 	}
 	else
 		printf("error2, hamm radius is%d but lower is %d, and depth is %d\n",hamm_radius,lower_bound_distance(node),node->depth);
@@ -377,7 +486,8 @@ int SearchNode::get_size(int r, int c) {
 void SearchNode::check_r_solution(Node* node) {
 	int r = hamm_radius;
 	UINT64 total_offset;
-	sparse_hash_map<UINT64,Node*>::const_iterator got;
+    std::unordered_map<UINT64,Node*>::iterator got;
+	//sparse_hash_map<UINT64,Node*>::const_iterator got;
 	int two_to_d = pow2(node->depth);
 	UINT8* query_pattern = query_normchunks + two_to_d - 1;
 	UINT8* query_pattern_next_lvl = query_normchunks + 2*two_to_d - 1;
@@ -393,17 +503,19 @@ void SearchNode::check_r_solution(Node* node) {
 	int c_index;
 
 	bool valid_child = true;
-
+    //cout<< "2222222222222222222222 " <<two_to_d <<endl;
 
 	// used for stopping criterion (location of (s+1)th 1)
 
 	int sum_diff = 0;
 	for(int i=0; i<two_to_d;i++) {
 		hamm_ws[i] = node_pattern[i] - query_pattern[i];
+        //cout<< (UINT32) node_pattern[i] << " " << (UINT32) query_pattern[i] <<endl;
 		sum_diff += abs(hamm_ws[i]);
 	}
 	r = (hamm_radius - sum_diff);
 
+    //cout<< hamm_radius << " "<< sum_diff<< " " <<two_to_d <<endl;
 	if(r<0) {
 		printf("negative r\n");
 		return;
@@ -434,9 +546,8 @@ void SearchNode::check_r_solution(Node* node) {
 			}
 			if(s!=0)
 				r_dis[s] = 2 * (power[s] - power[s-1] - 1)+abs(hamm_ws[s]);
-
+            
 			int count_child = num_possible_child(hamm_ws, r_dis, two_to_d, num_partial_result);
-			
 			if(count_child != 0) {
 				
 				int child_to_check = count_child;

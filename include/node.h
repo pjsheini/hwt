@@ -42,8 +42,9 @@ public:
 
 	UINT8* subnorms;
 
-	sparse_hash_map<UINT64,Node*> children;
-
+	//sparse_hash_map<UINT64,Node*> children;
+    
+    std::unordered_map<UINT64,Node*> children;
 	Node(int _depth,UINT8* chunk_subnorms);
 
 	~Node();

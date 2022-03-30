@@ -18,11 +18,8 @@ public:
 
 	bool insert(UINT8* code, Node* &curr_node);
 
-	void query(UINT8* q                                                                                                                                                                );
+	void query(UINT8* q);
 
 };
-
-
-
 
 #endif

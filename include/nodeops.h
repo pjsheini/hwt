@@ -34,7 +34,8 @@ Node* find_the_child(Node* curr_node,UINT8* code,UINT8* subnorms, int B_over_8,i
 	norm_chunks(subsubnorms,curr_node->depth+1,code,B_over_8);
 
 	UINT64 total_offset = find_offset_of_child(code, curr_node, subnorms, B_over_8);
-	sparse_hash_map<UINT64,Node*>::const_iterator got = curr_node->children.find(total_offset);
+    std::unordered_map<UINT64,Node*>::iterator got = curr_node->children.find(total_offset);
+	//sparse_hash_map<UINT64,Node*>::const_iterator got = curr_node->children.find(total_offset);
 	if(got==curr_node->children.end()){
 		target = new Node(curr_node->depth+1,subsubnorms);
 	}

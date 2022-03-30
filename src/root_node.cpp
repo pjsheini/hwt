@@ -35,3 +35,4 @@ RootNode::~RootNode(){
 	delete[] children;
 	printf("Done deleting ROOT node\n");
 }
+

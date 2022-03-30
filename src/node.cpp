@@ -85,7 +85,8 @@ void Node::expand() {
 		
 		norm_chunks(subsubnorms,depth+1,code,B_over_8);
 		total_offset = find_offset_of_child(code, subnorms);
-		sparse_hash_map<UINT64,Node*>::const_iterator got = children.find(total_offset);
+        //sparse_hash_map<UINT64,Node*>::const_iterator got = children.find(total_offset);
+		std::unordered_map<UINT64,Node*>::iterator got = children.find(total_offset);
 		if(got==children.end())
 		{
 
@@ -115,7 +116,8 @@ Node* Node::find_the_child(UINT8* code,UINT8* subnorms)
 	norm_chunks(subsubnorms,depth+1,code,B_over_8);
 
 	UINT64 total_offset = find_offset_of_child(code, subnorms);
-	sparse_hash_map<UINT64,Node*>::const_iterator got = children.find(total_offset);
+    std::unordered_map<UINT64,Node*>::iterator got = children.find(total_offset);
+	//sparse_hash_map<UINT64,Node*>::const_iterator got = children.find(total_offset);
 	if(got==children.end()){
 		target = new Node(depth+1,subsubnorms);
 		this->num_children++;
