@@ -1,4 +1,0 @@
-/home/pjsheini/C-Jupyter/hwt2_DramV02/build/CMakeFiles/rebuild_cache.dir
-/home/pjsheini/C-Jupyter/hwt2_DramV02/build/CMakeFiles/edit_cache.dir
-/home/pjsheini/C-Jupyter/hwt2_DramV02/build/CMakeFiles/linscan.dir
-/home/pjsheini/C-Jupyter/hwt2_DramV02/build/CMakeFiles/hwt_pj.dir
